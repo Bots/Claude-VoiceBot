@@ -1,7 +1,9 @@
 import os
+import time
 import torch
 import struct
 import pyaudio
+import webrtcvad
 import pvporcupine
 import numpy as np
 from dotenv import load_dotenv
@@ -14,7 +16,12 @@ load_dotenv()
 PV_ACCESS_KEY = os.getenv("PV_ACCESS_KEY")
 KEYWORD_FILE_PATH = os.getenv("KEYWORD_FILE_PATH")
 SAMPLE_RATE = 16000
-CHUNK_SIZE = 256
+CHUNK_SIZE = 480
+SILENCE_THRESHOLD = 10
+GRACE_PERIOD = 0.5
+
+# Initiate webrtcvad for silence detection
+vad = webrtcvad.Vad(3)
 
 # Initiate pvporcupine for hotword detection
 porcupine = pvporcupine.create(
@@ -55,29 +62,39 @@ def detect_hotword():
     except Exception as e:
         print(f"Error in hotword detection: {e}")
 
-def buffer_and_stream():
+def transcribe():
     buffer = []
+    silent_chunks = 0
+    is_speech = False
     print("Listening and buffering...")
     try:
+        # Add grace period
+        time.sleep(GRACE_PERIOD)
+        
         while True:
             chunk = audio_stream.read(CHUNK_SIZE)
-            buffer.append(chunk)
+            is_speech = vad.is_speech(chunk, SAMPLE_RATE)
+            
+            if is_speech:
+                buffer.append(chunk)
+                silent_chunks = 0
+            else:
+                silent_chunks += 1
+            
+            if silent_chunks > SILENCE_THRESHOLD:
+                break
+            
+            if len(buffer) * CHUNK_SIZE >= SAMPLE_RATE * 5:  # 5 seconds of audio
+                break
 
-            if len(buffer) * CHUNK_SIZE >= SAMPLE_RATE:
-                audio_data = b''.join(buffer)
-                numpy_data = np.frombuffer(audio_data, dtype=np.int16)
-                result = pipe(numpy_data, return_timestamps=True)
-                print(result["text"])
-                buffer = []
+        if buffer:
+            audio_data = b''.join(buffer)
+            numpy_data = np.frombuffer(audio_data, dtype=np.int16)
+            result = pipe(numpy_data, return_timestamps=True)
+            print(result["text"])
     except KeyboardInterrupt:
         print("Interrupted by user")
     except Exception as e:
         print(f"Error in buffering and streaming: {e}")
-
-def transcribe():
-    try:
-        buffer_and_stream()
-    except Exception as e:
-        print(f"Error in transcription: {e}")
         
 detect_hotword()
