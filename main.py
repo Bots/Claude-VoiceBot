@@ -18,7 +18,8 @@ KEYWORD_FILE_PATH = os.getenv("KEYWORD_FILE_PATH")
 SAMPLE_RATE = 16000
 CHUNK_SIZE = 480
 SILENCE_THRESHOLD = 10
-GRACE_PERIOD = 0.5
+GRACE_PERIOD = 1.75
+GRACE_CHUNKS = int(GRACE_PERIOD * SAMPLE_RATE / CHUNK_SIZE)
 
 # Initiate webrtcvad for silence detection
 vad = webrtcvad.Vad(3)
@@ -65,12 +66,9 @@ def detect_hotword():
 def transcribe():
     buffer = []
     silent_chunks = 0
-    is_speech = False
+    grace_chunks_remaining = GRACE_CHUNKS
     print("Listening and buffering...")
     try:
-        # Add grace period
-        time.sleep(GRACE_PERIOD)
-        
         while True:
             chunk = audio_stream.read(CHUNK_SIZE)
             is_speech = vad.is_speech(chunk, SAMPLE_RATE)
@@ -78,11 +76,13 @@ def transcribe():
             if is_speech:
                 buffer.append(chunk)
                 silent_chunks = 0
+                grace_chunks_remaining = GRACE_CHUNKS  # Reset grace period when speech is detected
             else:
                 silent_chunks += 1
-            
-            if silent_chunks > SILENCE_THRESHOLD:
-                break
+                if grace_chunks_remaining > 0:
+                    grace_chunks_remaining -= 1
+                elif silent_chunks > SILENCE_THRESHOLD:
+                    break
             
             if len(buffer) * CHUNK_SIZE >= SAMPLE_RATE * 5:  # 5 seconds of audio
                 break
