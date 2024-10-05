@@ -1,5 +1,4 @@
 import os
-import time
 import wave
 import torch
 import struct
@@ -9,13 +8,14 @@ import pvporcupine
 import numpy as np
 from dotenv import load_dotenv
 from transformers import pipeline
-from matplotlib import pyplot as plt
+from anthropic import Anthropic
 
 # Load environment vars
 print("loading env vars...")
 load_dotenv()
 PV_ACCESS_KEY = os.getenv("PV_ACCESS_KEY")
 KEYWORD_FILE_PATH = os.getenv("KEYWORD_FILE_PATH")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 SAMPLE_RATE = 16000
 CHUNK_SIZE = 480
 SILENCE_THRESHOLD = 10
@@ -28,6 +28,11 @@ vad = webrtcvad.Vad(3)
 # Initiate pvporcupine for hotword detection
 porcupine = pvporcupine.create(
     access_key=PV_ACCESS_KEY, keyword_paths=[KEYWORD_FILE_PATH])
+
+# Initiate anthropic
+client = Anthropic(
+    api_key=ANTHROPIC_API_KEY,
+)
 
 # Configure pyaudio for audio stream
 pa = pyaudio.PyAudio()
@@ -112,9 +117,29 @@ def transcribe():
             numpy_data = np.frombuffer(audio_data, dtype=np.int16)
             result = pipe(numpy_data, return_timestamps=True)
             print(result["text"])
+            query_llm(result["text"])
     except KeyboardInterrupt:
         print("Interrupted by user")
     except Exception as e:
         print(f"Error in buffering and streaming: {e}")
+        
+
+def tts(response):
+    print("Speaking response...")
+    
+
+     
+def query_llm(prompt):
+   message = client.messages.create(
+       max_tokens=1024,
+       messages=[
+           {
+               "role": "user",
+               "content": f"You are a helpful assistant. Answer the following question: {prompt}"
+           }
+       ],
+       model="claude-3-opus-20240229",
+   )
+   print(message.content)
         
 detect_hotword()
