@@ -7,8 +7,9 @@ import webrtcvad
 import pvporcupine
 import numpy as np
 from dotenv import load_dotenv
-from transformers import pipeline
 from anthropic import Anthropic
+from transformers import pipeline
+from elevenlabs import ElevenLabs, play
 
 # Load environment vars
 print("loading env vars...")
@@ -16,6 +17,7 @@ load_dotenv()
 PV_ACCESS_KEY = os.getenv("PV_ACCESS_KEY")
 KEYWORD_FILE_PATH = os.getenv("KEYWORD_FILE_PATH")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 SAMPLE_RATE = 16000
 CHUNK_SIZE = 480
 SILENCE_THRESHOLD = 10
@@ -32,6 +34,11 @@ porcupine = pvporcupine.create(
 # Initiate anthropic
 client = Anthropic(
     api_key=ANTHROPIC_API_KEY,
+)
+
+# Initiate elevenlabs
+elevenlabs = ElevenLabs(
+    api_key=ELEVENLABS_API_KEY
 )
 
 # Configure pyaudio for audio stream
@@ -122,11 +129,6 @@ def transcribe():
         print("Interrupted by user")
     except Exception as e:
         print(f"Error in buffering and streaming: {e}")
-        
-
-def tts(response):
-    print("Speaking response...")
-    
 
      
 def query_llm(prompt):
@@ -135,11 +137,21 @@ def query_llm(prompt):
        messages=[
            {
                "role": "user",
-               "content": f"You are a helpful assistant. Answer the following question: {prompt}"
+               "content": f"You are a helpful assistant. Answer the following question with a consice answer (1 sentence): {prompt}"
            }
        ],
        model="claude-3-opus-20240229",
    )
    print(message.content)
+   tts(message.content[0].text)
+   
+def tts(response):
+    print("Speaking response...")
+    audio = elevenlabs.generate(
+        text=response,
+        voice="Rachel",
+        model="eleven_multilingual_v2"
+    )
+    play(audio)
         
 detect_hotword()
