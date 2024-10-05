@@ -1,5 +1,6 @@
 import os
 import time
+import wave
 import torch
 import struct
 import pyaudio
@@ -54,8 +55,9 @@ def detect_hotword():
             audio_frame = audio_stream.read(porcupine.frame_length)
             audio_frame = struct.unpack_from("h" * porcupine.frame_length, audio_frame)
             keyword_index = porcupine.process(audio_frame)
-            if keyword_index>=0:
+            if keyword_index >= 0:
                 print("hotword detected")
+                play_audio("click.wav")
                 transcribe()
                 print("Resuming hotword detection...")
     except KeyboardInterrupt:
@@ -63,6 +65,24 @@ def detect_hotword():
     except Exception as e:
         print(f"Error in hotword detection: {e}")
 
+
+def play_audio(file_path):
+    wf = wave.open(file_path, 'rb')
+    stream = pa.open(format=pa.get_format_from_width(wf.getsampwidth()),
+                     channels=wf.getnchannels(),
+                     rate=wf.getframerate(),
+                     output=True)
+    
+    data = wf.readframes(1024)
+    while data:
+        stream.write(data)
+        data = wf.readframes(1024)
+    
+    stream.stop_stream()
+    stream.close()
+    wf.close()
+    
+    
 def transcribe():
     buffer = []
     silent_chunks = 0
