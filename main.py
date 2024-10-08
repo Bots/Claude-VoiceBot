@@ -3,6 +3,7 @@ import wave
 import time
 import torch
 import struct
+import logging
 import pyaudio
 import pyttsx3
 import webrtcvad
@@ -24,12 +25,16 @@ ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 # Configure audio settings
 SAMPLE_RATE = 16000
 CHUNK_SIZE = 480
-SILENCE_THRESHOLD = 10
+SILENCE_THRESHOLD = 10 
 GRACE_PERIOD = 2.0
 GRACE_CHUNKS = int(GRACE_PERIOD * SAMPLE_RATE / CHUNK_SIZE)
 
 # Other settings
 global tts_method
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Initiate pyttsx3 for text-to-speech
 engine = pyttsx3.init()
@@ -73,21 +78,26 @@ pipe = pipeline(
 # Ask user which TTS method they want to use
 def get_tts_preference():
     while True:
-        choice = input("Which TTS method do you want to use? (1) ElevenLabs(cloud) (2) pyttsx3(on-device): ")
-        if choice in ["1", "2"]:
-            return 'elevenlabs' if choice == '1' else 'pyttsx3'
-        print("Invalid choice. Please enter 1 or 2.")
+        choice = input("Which TTS method do you want to use? (1) ElevenLabs(cloud) (2) pyttsx3(on-device) default is 1: ")
+        if choice == "" or choice == "1":
+            return 'elevenlabs' 
+        elif choice == '2':
+            return 'pyttsx3'
+        else:
+            print("Invalid choice. Please enter 1 or 2.")
+            return 'elevenlabs'
 
 # Start hotword detection
 def detect_hotword():
-    print("listening for hotword...")
+    logger.info("Starting hotword detection...")
+    start_time = time.time()
     try:
         while True:
             audio_frame = audio_stream.read(porcupine.frame_length)
             audio_frame = struct.unpack_from("h" * porcupine.frame_length, audio_frame)
             keyword_index = porcupine.process(audio_frame)
             if keyword_index >= 0:
-                print("hotword detected")
+                logger.info(f"Hotword detected in {time.time() - start_time:.2f} seconds")
                 transcribe()
                 print("Resuming hotword detection...")
     except KeyboardInterrupt:
@@ -117,39 +127,36 @@ def play_audio(file_path):
     
 # Helper function to transcribe audio
 def transcribe():
+    logger.info("Starting transcription...")
+    play_audio("noti.wav")
     buffer = []
     silent_chunks = 0
-    grace_chunks_remaining = GRACE_CHUNKS
-    print("Transcribing...")
+    start_time = time.time()
+    
     try:
-        # Start buffering immediately
-        for _ in range(int(0.5 * SAMPLE_RATE / CHUNK_SIZE)):  # Buffer 0.5 seconds initially
-            chunk = audio_stream.read(CHUNK_SIZE)
-        play_audio("noti.wav")
-        while True:
-            chunk = audio_stream.read(CHUNK_SIZE)
-            is_speech = vad.is_speech(chunk, SAMPLE_RATE)
-            
+        for chunk in iter(lambda: audio_stream.read(CHUNK_SIZE), b''):
             buffer.append(chunk)
+            is_speech = vad.is_speech(chunk, SAMPLE_RATE)
             
             if is_speech:
                 silent_chunks = 0
-                grace_chunks_remaining = GRACE_CHUNKS
             else:
                 silent_chunks += 1
-                if grace_chunks_remaining > 0:
-                    grace_chunks_remaining -= 1
-                elif silent_chunks > SILENCE_THRESHOLD:
-                    break
-            
-            if len(buffer) * CHUNK_SIZE >= SAMPLE_RATE * 10:  # Max 10 seconds of audio
+                
+            if silent_chunks > SILENCE_THRESHOLD:
                 break
-
+            
+            if len(buffer) * CHUNK_SIZE >= SAMPLE_RATE * 20:  # Max 20 seconds of audio
+                break
+        
         if buffer:
             audio_data = b''.join(buffer)
             numpy_data = np.frombuffer(audio_data, dtype=np.int16)
+            transcription_start = time.time()
             result = pipe(numpy_data, return_timestamps=True)
-            print(result["text"])
+            print("Query understood: ", result["text"])
+            logger.info(f"Transcription completed in {time.time() - transcription_start:.2f} seconds")
+            logger.info(f"Total transcription process took {time.time() - start_time:.2f} seconds")
             query_llm(result["text"])
     except KeyboardInterrupt:
         print("Interrupted by user")
@@ -158,7 +165,8 @@ def transcribe():
 
 # Query Claude
 def query_llm(prompt):
-    print("Querying Claude...")
+    logger.info("Starting LLM query...")
+    start_time = time.time()
     try:
         message = client.messages.create(
             max_tokens=1024,
@@ -170,13 +178,16 @@ def query_llm(prompt):
             ],
             model="claude-3-opus-20240229",
         )
-        print(message.content)
-        tts(message.content[0].text)
+        text = message.content[0].text
+        logger.info(f"LLM query completed in {time.time() - start_time:.2f} seconds")
+        tts(text)
     except Exception as e:
         print(f"Error querying Claude: {e}")
    
 # Text to speech
 def tts(response):
+    logger.info("Starting text-to-speech...")
+    start_time = time.time()
     try:
         print("Speaking response...")
         if tts_method == 'elevenlabs':
@@ -185,10 +196,12 @@ def tts(response):
                 voice="Rachel",
                 model="eleven_multilingual_v2"
             )
+            logger.info(f"Text-to-speech completed in {time.time() - start_time:.2f} seconds")
             play(audio)
         elif tts_method == 'pyttsx3':
             engine.say(response)
             engine.runAndWait()
+            logger.info(f"Text-to-speech completed in {time.time() - start_time:.2f} seconds")
     except Exception as e:
         print(f"Error in text-to-speech: {e}")
 
