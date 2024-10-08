@@ -4,6 +4,7 @@ numpy==2.1.2
 pvporcupine==3.0.3
 PyAudio==0.2.14
 python-dotenv==1.0.1
+pyttsx3==2.9.8
 torch==2.4.1
 transformers==4.45.1
 webrtcvad==2.0.10

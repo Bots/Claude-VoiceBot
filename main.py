@@ -4,6 +4,7 @@ import time
 import torch
 import struct
 import pyaudio
+import pyttsx3
 import webrtcvad
 import pvporcupine
 import numpy as np
@@ -26,6 +27,9 @@ CHUNK_SIZE = 480
 SILENCE_THRESHOLD = 10
 GRACE_PERIOD = 2.0
 GRACE_CHUNKS = int(GRACE_PERIOD * SAMPLE_RATE / CHUNK_SIZE)
+
+# Initiate pyttsx3 for text-to-speech
+engine = pyttsx3.init()
 
 # Initiate webrtcvad for silence detection
 vad = webrtcvad.Vad(3)
@@ -164,12 +168,14 @@ def query_llm(prompt):
 def tts(response):
     try:
         print("Speaking response...")
-        audio = elevenlabs.generate(
-            text=response,
-            voice="Rachel",
-            model="eleven_multilingual_v2"
-        )
-        play(audio)
+        engine.say(response)
+        engine.runAndWait()
+        # audio = elevenlabs.generate(
+        #     text=response,
+        #     voice="Rachel",
+        #     model="eleven_multilingual_v2"
+        # )
+        # play(audio)
     except Exception as e:
         print(f"Error in text-to-speech: {e}")
 
