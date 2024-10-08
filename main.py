@@ -4,6 +4,7 @@ import time
 import torch
 import struct
 import pyaudio
+import pyttsx3
 import webrtcvad
 import pvporcupine
 import numpy as np
@@ -26,6 +27,12 @@ CHUNK_SIZE = 480
 SILENCE_THRESHOLD = 10
 GRACE_PERIOD = 2.0
 GRACE_CHUNKS = int(GRACE_PERIOD * SAMPLE_RATE / CHUNK_SIZE)
+
+# Other settings
+global tts_method
+
+# Initiate pyttsx3 for text-to-speech
+engine = pyttsx3.init()
 
 # Initiate webrtcvad for silence detection
 vad = webrtcvad.Vad(3)
@@ -62,6 +69,14 @@ pipe = pipeline(
     torch_dtype = torch.float16,
     device = "cuda:0"
 )
+
+# Ask user which TTS method they want to use
+def get_tts_preference():
+    while True:
+        choice = input("Which TTS method do you want to use? (1) ElevenLabs(cloud) (2) pyttsx3(on-device): ")
+        if choice in ["1", "2"]:
+            return 'elevenlabs' if choice == '1' else 'pyttsx3'
+        print("Invalid choice. Please enter 1 or 2.")
 
 # Start hotword detection
 def detect_hotword():
@@ -164,14 +179,21 @@ def query_llm(prompt):
 def tts(response):
     try:
         print("Speaking response...")
-        audio = elevenlabs.generate(
-            text=response,
-            voice="Rachel",
-            model="eleven_multilingual_v2"
-        )
-        play(audio)
+        if tts_method == 'elevenlabs':
+            audio = elevenlabs.generate(
+                text=response,
+                voice="Rachel",
+                model="eleven_multilingual_v2"
+            )
+            play(audio)
+        elif tts_method == 'pyttsx3':
+            engine.say(response)
+            engine.runAndWait()
     except Exception as e:
         print(f"Error in text-to-speech: {e}")
 
 # Start the program      
-detect_hotword()
+if __name__ == "__main__":
+    tts_method = get_tts_preference()
+    print(f"Using {tts_method} for text-to-speech")
+    detect_hotword()

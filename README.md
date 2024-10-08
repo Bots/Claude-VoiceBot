@@ -36,7 +36,8 @@ cp env.example .env
 
 # Usage
 1. Run the main script: python main.py
-2. Say the hotword (default is 'hey computer') to activate the bot, then speak your query. The bot will process your speech, generate a response using Claude, and speak the answer back to you.
+2. Choose whether to use ElevenLabs or pyTTSx3. ElevenLabs is a cloud service and therefore takes a little more time than the much lower quality, on-device pyTTSx3.
+3. Say the hotword (default is 'hey computer') to activate the bot, after you hear the notification, speak your query. The bot will process your speech, generate a response using Claude, and speak the answer back to you.
 
 # Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
